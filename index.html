@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Academia Quant: Opciones, Gamma & Skew</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0f172a; /* slate-900 */
+            color: #e2e8f0; /* slate-200 */
+        }
+        /* Custom Scrollbar for sidebar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .active-tab {
+            background-color: #3b82f6; /* blue-500 */
+            color: white;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body class="h-screen flex flex-col overflow-hidden">
+
+    <!-- Header -->
+    <header class="glass-panel border-b border-slate-700 py-4 px-6 flex justify-between items-center z-10 relative">
+        <div class="flex items-center gap-3">
+            <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 12l3-3 3 3 4-4M8 21l4-4 4 4M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"></path></svg>
+            <h1 class="text-2xl font-bold text-white tracking-tight">Academia <span class="text-blue-500">Quant</span></h1>
+        </div>
+        <div class="text-sm text-slate-400">
+            Módulo actual: <span id="header-module-title" class="text-white font-semibold">Cargando...</span>
+        </div>
+    </header>
+
+    <!-- Main Layout -->
+    <div class="flex flex-1 overflow-hidden relative">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="w-64 glass-panel border-r border-slate-700 overflow-y-auto flex-shrink-0 hidden md:block">
+            <div class="p-4">
+                <h2 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Ruta de Aprendizaje</h2>
+                <nav id="nav-menu" class="space-y-2">
+                    <!-- Nav items injected via JS -->
+                </nav>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 overflow-y-auto p-4 md:p-8 flex flex-col">
+            <!-- Mobile Menu Toggle (Visible only on small screens) -->
+            <div class="md:hidden mb-4">
+                <select id="mobile-nav" class="w-full bg-slate-800 border border-slate-600 text-white rounded-lg p-2 focus:ring-blue-500 focus:border-blue-500">
+                    <!-- Mobile options injected via JS -->
+                </select>
+            </div>
+
+            <!-- Content Container -->
+            <div class="max-w-5xl mx-auto w-full grid grid-cols-1 lg:grid-cols-2 gap-8">
+                
+                <!-- Theory & Controls Column -->
+                <div class="flex flex-col gap-6">
+                    <div id="theory-content" class="glass-panel p-6 rounded-2xl shadow-xl">
+                        <!-- Theory content injected via JS -->
+                    </div>
+
+                    <!-- Interactive Controls -->
+                    <div id="interactive-controls" class="glass-panel p-6 rounded-2xl shadow-xl hidden">
+                        <h3 class="text-lg font-bold text-white mb-4 border-b border-slate-600 pb-2">Controles de Simulación</h3>
+                        <div id="controls-container" class="space-y-4">
+                            <!-- Controls injected via JS -->
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Chart Column -->
+                <div class="flex flex-col gap-6">
+                    <div class="glass-panel p-6 rounded-2xl shadow-xl sticky top-4">
+                        <h3 id="chart-title" class="text-lg font-bold text-white mb-4">Visualizador Interactivo</h3>
+                        <div class="relative w-full h-80">
+                            <canvas id="mainChart"></canvas>
+                        </div>
+                        <p id="chart-description" class="text-sm text-slate-400 mt-4 italic">
+                            <!-- Chart desc injected via JS -->
+                        </p>
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- JavaScript Logic -->
+    <script>
+        let currentChart = null;
+        let currentModuleId = 1;
+
+        // --- MODULE DATA ---
+        // Estructura modular escalable. Para agregar contenido, solo añadimos un nuevo objeto aquí.
+        const modules = [
+            {
+                id: 1,
+                category: "Fundamentos",
+                title: "1. Conceptos Básicos",
+                theory: `
+                    <h2 class="text-2xl font-bold text-blue-400 mb-3">Introducción a las Opciones</h2>
+                    <p class="text-slate-300 mb-3">Una opción es un contrato que te da el <strong>derecho</strong> (pero no la obligación) de comprar o vender un activo a un precio fijo (<strong>Strike</strong>) en o antes de una fecha determinada (<strong>Expiración</strong>).</p>
+                    <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-4">
+                        <li><strong class="text-green-400">CALL:</strong> Apuesta a que el precio subirá. Ganas si el precio de la acción supera el Strike + la prima que pagaste.</li>
+                        <li><strong class="text-red-400">PUT:</strong> Apuesta a que el precio bajará. Funciona como un seguro contra caídas.</li>
+                    </ul>
+                    <p class="text-sm text-slate-400">Mueve los controles abajo para ver cómo cambia el perfil de riesgo (Payoff) de comprar una opción Call.</p>
+                `,
+                chartTitle: "Perfil de Riesgo: Long Call",
+                chartDesc: "La pérdida máxima está limitada a la prima pagada. Las ganancias teóricas son ilimitadas a medida que sube la acción.",
+                controls: [
+                    { id: 'strikePrice', label: 'Precio Strike ($)', type: 'range', min: 80, max: 120, value: 100, step: 1 },
+                    { id: 'premium', label: 'Prima Pagada ($)', type: 'range', min: 1, max: 10, value: 5, step: 0.5 }
+                ],
+                renderChart: () => {
+                    const strike = parseFloat(document.getElementById('strikePrice').value);
+                    const premium = parseFloat(document.getElementById('premium').value);
+                    
+                    const prices = [];
+                    const pnl = [];
+                    for(let i = 70; i <= 130; i++) {
+                        prices.push(i);
+                        // Payoff = Max(0, Price - Strike) - Premium
+                        let profit = Math.max(0, i - strike) - premium;
+                        pnl.push(profit);
+                    }
+
+                    updateChartInstance('line', prices, pnl, 'Ganancia / Pérdida ($)', 
+                        (ctx) => (ctx.p0?.parsed?.y < 0) ? 'rgba(239, 68, 68, 0.8)' : 'rgba(34, 197, 94, 0.8)' // Red if loss, Green if profit
+                    );
+                }
+            },
+            {
+                id: 2,
+                category: "Fundamentos",
+                title: "2. Las Griegas y Gamma",
+                theory: `
+                    <h2 class="text-2xl font-bold text-blue-400 mb-3">La aceleración (Gamma)</h2>
+                    <p class="text-slate-300 mb-3">Para hacer trading cuantitativo, no miras solo el precio, miras las "Griegas".</p>
+                    <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-4">
+                        <li><strong>Delta:</strong> Cuánto cambia el precio de la opción si la acción se mueve $1.</li>
+                        <li><strong class="text-blue-300">Gamma:</strong> Cuánto cambia <em>Delta</em> si la acción se mueve $1. Es la <strong>aceleración</strong>.</li>
+                    </ul>
+                    <p class="text-slate-300 mb-3">Gamma es más alta cuando la acción está exactamente en el precio Strike (At-The-Money). Aquí es donde el Delta cambia más violentamente.</p>
+                `,
+                chartTitle: "Curva de Gamma",
+                chartDesc: "Nota cómo Gamma forma una 'campana' centrada en el Strike. Las opciones At-The-Money (ATM) tienen el Gamma más alto.",
+                controls: [
+                    { id: 'gammaStrike', label: 'Precio Strike de la Opción ($)', type: 'range', min: 80, max: 120, value: 100, step: 1 },
+                ],
+                renderChart: () => {
+                    const strike = parseFloat(document.getElementById('gammaStrike').value);
+                    
+                    const prices = [];
+                    const gammaVals = [];
+                    // Simplified Gamma bell curve simulation (using Gaussian function for visualization)
+                    for(let i = 70; i <= 130; i++) {
+                        prices.push(i);
+                        // Math.exp(-0.5 * ((x-mu)/sigma)^2)
+                        let gamma = Math.exp(-0.5 * Math.pow((i - strike)/5, 2)) * 0.1; 
+                        gammaVals.push(gamma);
+                    }
+
+                    updateChartInstance('line', prices, gammaVals, 'Valor de Gamma', 'rgba(59, 130, 246, 0.8)', true);
+                }
+            },
+            {
+                id: 3,
+                category: "Quant Trading",
+                title: "3. El Edge: Niveles Gamma (GEX)",
+                theory: `
+                    <h2 class="text-2xl font-bold text-blue-400 mb-3">Gamma Exposure (GEX)</h2>
+                    <p class="text-slate-300 mb-3">Aquí está tu <strong>Edge (ventaja)</strong>. El mercado está dominado por Market Makers (creadores de mercado) que te venden las opciones. Ellos deben cubrirse (hedging).</p>
+                    <div class="bg-slate-800 p-4 rounded-lg mb-4 border-l-4 border-green-500">
+                        <strong class="text-green-400">Gamma Positivo (Sticky Market):</strong><br>
+                        Los Market Makers tienen Gamma +. Si el mercado sube, ellos venden acciones. Si baja, compran. Esto actúa como un <em>imán</em>, reduciendo la volatilidad. El precio se queda pegado en los "Niveles Gamma" altos.
+                    </div>
+                    <div class="bg-slate-800 p-4 rounded-lg mb-4 border-l-4 border-red-500">
+                        <strong class="text-red-400">Gamma Negativo (Volatile Market):</strong><br>
+                        Los Market Makers tienen Gamma -. Si el mercado baja, ellos <em>venden más</em> para cubrirse, acelerando la caída. Aumenta la volatilidad y hay movimientos bruscos.
+                    </div>
+                    <p class="text-sm text-slate-400">En la data cuantitativa buscas el "Zero Gamma Level" (Flip Point). Por encima es mercado tranquilo, por debajo es peligro/volatilidad.</p>
+                `,
+                chartTitle: "Perfil de Gamma por Strike (Market Makers)",
+                chartDesc: "Las barras hacia arriba indican Gamma Positiva (actúan como resistencia/soporte magnético). Barras hacia abajo indican Gamma Negativo (riesgo de aceleración).",
+                controls: [
+                    { id: 'spotPrice', label: 'Precio Actual del Mercado (Spot)', type: 'range', min: 3800, max: 4200, value: 4000, step: 10 },
+                ],
+                renderChart: () => {
+                    const spot = parseFloat(document.getElementById('spotPrice').value);
+                    const strikes = [3800, 3850, 3900, 3950, 4000, 4050, 4100, 4150, 4200];
+                    const gex = strikes.map(s => {
+                        // Fake data generation based on spot: 
+                        // Typically, puts (lower strikes) have negative dealer gamma if customers bought puts.
+                        // Calls (higher strikes) have positive dealer gamma if customers overwrote calls.
+                        let val = (s - 3950) * 2; 
+                        // Add a big cluster around 4000 (a major level)
+                        if (s === 4000) val += 500;
+                        if (s === 3900) val -= 400; // Big put wall
+                        return val;
+                    });
+
+                    updateChartInstance('bar', strikes, gex, 'Exposición Gamma (GEX) en Millones', 
+                        (ctx) => ctx.raw > 0 ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)'
+                    );
+                }
+            },
+            {
+                id: 4,
+                category: "Quant Trading",
+                title: "4. Volatility Skew",
+                theory: `
+                    <h2 class="text-2xl font-bold text-blue-400 mb-3">La "Sonrisa" de la Volatilidad</h2>
+                    <p class="text-slate-300 mb-3">En teoría, un Call y un Put equidistantes del precio actual deberían costar lo mismo en volatilidad. En la vida real, <strong>no es así</strong>.</p>
+                    <p class="text-slate-300 mb-3">Por el miedo a las caídas (Crash del 87), los inversores pagan mucho más por los Puts (seguros) que por los Calls. Esto deforma la volatilidad implícita creando un "Skew" o "Smirk".</p>
+                    <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-4">
+                        <li><strong>Cómo usarlo:</strong> Si el Skew se empina mucho (Puts carísimos), el mercado tiene mucho miedo. Suele preceder rebotes. Si se aplana, hay complacencia.</li>
+                    </ul>
+                `,
+                chartTitle: "Curva de Volatility Skew (Smirk)",
+                chartDesc: "El eje Y es Volatilidad Implícita (IV). Observa cómo los strikes bajos (Puts OTM) tienen mayor IV que los strikes altos (Calls OTM).",
+                controls: [
+                    { id: 'fearLevel', label: 'Nivel de Miedo en el Mercado (VIX)', type: 'range', min: 10, max: 40, value: 20, step: 1 },
+                ],
+                renderChart: () => {
+                    const fear = parseFloat(document.getElementById('fearLevel').value);
+                    const strikes = [];
+                    const iv = [];
+                    // Generate a "smirk" curve
+                    for(let i = 80; i <= 120; i+=2) {
+                        strikes.push(i);
+                        // Higher IV for lower strikes. The 'fear' variable increases the slope.
+                        let baseIv = 15;
+                        let slope = fear * 0.05;
+                        let val = baseIv + Math.pow(Math.max(0, 100 - i), 1.2) * slope + Math.pow(Math.max(0, i - 100), 1.1) * (slope * 0.3);
+                        iv.push(val);
+                    }
+
+                    updateChartInstance('line', strikes, iv, 'Volatilidad Implícita (%)', 'rgba(168, 85, 247, 0.8)', true); // Purple
+                }
+            },
+            {
+                id: 5,
+                category: "Plan de Acción",
+                title: "5. Leyendo tu Data Cuantitativa",
+                theory: `
+                    <h2 class="text-2xl font-bold text-blue-400 mb-3">El Plan de Trading</h2>
+                    <p class="text-slate-300 mb-3">Cuando abras tus herramientas de data cuantitativa cada mañana, busca estos 3 datos:</p>
+                    <ol class="list-decimal pl-5 text-slate-300 space-y-3 mb-4">
+                        <li><strong>Zero Gamma (Nivel Flip):</strong> Si el SPX está en 4100 y el Zero Gamma es 4050, estamos en Gamma Positivo. Operamos <em>Mean Reversion</em> (comprar soportes, vender resistencias). Si caemos bajo 4050, operamos <em>Breakouts/Momentum</em>.</li>
+                        <li><strong>Call Wall:</strong> El strike superior con más Gamma. Actúa como el "techo" absoluto del mercado ese día.</li>
+                        <li><strong>Put Wall:</strong> El strike inferior con más Gamma negativo. Actúa como piso (o como imán de crash si se rompe).</li>
+                    </ol>
+                    <p class="text-green-400 font-bold mt-4">¡Pídeme a través de Gémini que agregue calculadoras específicas o que profundice en estrategias como Iron Condors, Straddles o análisis de Order Flow en futuros módulos!</p>
+                `,
+                chartTitle: "Mapa de Calor Estructural del Mercado",
+                chartDesc: "Visualización de Muros (Walls). El Call Wall frena las subidas, el Put Wall frena las bajadas.",
+                controls: [], // No controls for summary
+                renderChart: () => {
+                    const strikes = ['3900 (Put Wall)', '3950', '4000 (Zero Gamma)', '4050', '4100 (Call Wall)'];
+                    const data = [-1500, -200, 50, 400, 2000];
+
+                    updateChartInstance('bar', strikes, data, 'Magnitud (Contratos x Gamma)', 
+                        (ctx) => {
+                            const val = ctx.raw;
+                            if (val > 1000) return 'rgba(59, 130, 246, 0.8)'; // Blue for call wall
+                            if (val < -1000) return 'rgba(239, 68, 68, 0.8)'; // Red for put wall
+                            return 'rgba(148, 163, 184, 0.5)'; // Neutral
+                        }
+                    );
+                }
+            },
+            {
+                id: 6,
+                category: "Estrategias",
+                title: "6. Straddle (Volatilidad)",
+                theory: `
+                    <h2 class="text-2xl font-bold text-blue-400 mb-3">Long Straddle</h2>
+                    <p class="text-slate-300 mb-3">Un <strong>Straddle</strong> consiste en comprar un Call y un Put exactamente al mismo precio Strike y misma fecha de expiración.</p>
+                    <p class="text-slate-300 mb-3">Se utiliza cuando esperas un <strong>movimiento explosivo</strong> (gran volatilidad, como un reporte de ganancias o datos de inflación CPI), pero no sabes en qué dirección.</p>
+                    <ul class="list-disc pl-5 text-slate-300 space-y-2 mb-4">
+                        <li><strong class="text-green-400">Riesgo:</strong> Limitado a las primas que pagaste. Ganas si el mercado se mueve fuerte hacia arriba o hacia abajo.</li>
+                        <li><strong class="text-red-400">Enemigo:</strong> El paso del tiempo (Theta) y que el mercado se quede lateralizado cerca del Strike original.</li>
+                    </ul>
+                `,
+                chartTitle: "Perfil de Riesgo: Long Straddle",
+                chartDesc: "Ganas si el precio se aleja del Strike lo suficiente en cualquier dirección para cubrir el costo de ambas opciones.",
+                controls: [
+                    { id: 'straddleStrike', label: 'Strike (Call & Put)', type: 'range', min: 3800, max: 4200, value: 4000, step: 10 },
+                    { id: 'straddlePremium', label: 'Costo Total (Call + Put)', type: 'range', min: 10, max: 200, value: 100, step: 5 }
+                ],
+                renderChart: () => {
+                    const strike = parseFloat(document.getElementById('straddleStrike').value);
+                    const premium = parseFloat(document.getElementById('straddlePremium').value);
+                    
+                    const prices = [];
+                    const pnl = [];
+                    for(let i = 3700; i <= 4300; i+=10) {
+                        prices.push(i);
+                        // Payoff of Call + Payoff of Put - Total Premium
+                        let callProfit = Math.max(0, i - strike);
+                        let putProfit = Math.max(0, strike - i);
+                        pnl.push((callProfit + putProfit) - premium);
+                    }
+
+                    updateChartInstance('line', prices, pnl, 'P&L ($)', 
+                        (ctx) => (ctx.p0?.parsed?.y < 0) ? 'rgba(239, 68, 68, 0.8)' : 'rgba(34, 197, 94, 0.8)' 
+                    );
+                }
+            }
+        ];
+
+        // --- CORE FUNCTIONS ---
+
+        function initApp() {
+            renderNavigation();
+            loadModule(1);
+            
+            // Handle window resize for chart
+            window.addEventListener('resize', () => {
+                if (currentChart) currentChart.resize();
+            });
+        }
+
+        function renderNavigation() {
+            const navMenu = document.getElementById('nav-menu');
+            const mobileNav = document.getElementById('mobile-nav');
+            
+            navMenu.innerHTML = '';
+            mobileNav.innerHTML = '';
+
+            // Agrupar módulos por categoría
+            const categories = {};
+            modules.forEach(mod => {
+                if (!categories[mod.category]) categories[mod.category] = [];
+                categories[mod.category].push(mod);
+            });
+
+            for (const [categoryName, mods] of Object.entries(categories)) {
+                // Cabecera de Categoría para Desktop
+                const catHeader = document.createElement('h3');
+                catHeader.className = 'text-xs font-bold text-slate-500 uppercase tracking-wider mt-6 mb-2 pl-2';
+                catHeader.innerText = categoryName;
+                navMenu.appendChild(catHeader);
+
+                // OptGroup de Categoría para Mobile
+                const optGroup = document.createElement('optgroup');
+                optGroup.label = categoryName;
+
+                mods.forEach(mod => {
+                    // Botón Desktop
+                    const btn = document.createElement('button');
+                    btn.className = `w-full text-left px-4 py-2 rounded-lg transition-colors duration-200 text-sm text-slate-300 hover:bg-slate-700 hover:text-white mb-1 ${mod.id === currentModuleId ? 'active-tab' : ''}`;
+                    btn.innerText = mod.title;
+                    btn.onclick = () => loadModule(mod.id);
+                    navMenu.appendChild(btn);
+
+                    // Opción Mobile
+                    const opt = document.createElement('option');
+                    opt.value = mod.id;
+                    opt.innerText = mod.title;
+                    if (mod.id === currentModuleId) opt.selected = true;
+                    optGroup.appendChild(opt);
+                });
+                
+                mobileNav.appendChild(optGroup);
+            }
+
+            // Evento para select en móviles
+            mobileNav.onchange = (e) => loadModule(parseInt(e.target.value));
+        }
+
+        function loadModule(id) {
+            currentModuleId = id;
+            const module = modules.find(m => m.id === id);
+            
+            // Update UI State
+            renderNavigation(); // Refresh active states
+            document.getElementById('header-module-title').innerText = module.title;
+            document.getElementById('theory-content').innerHTML = module.theory;
+            document.getElementById('chart-title').innerText = module.chartTitle;
+            document.getElementById('chart-description').innerText = module.chartDesc;
+
+            // Render Controls
+            const controlsContainer = document.getElementById('controls-container');
+            const interactivePanel = document.getElementById('interactive-controls');
+            
+            if (module.controls && module.controls.length > 0) {
+                interactivePanel.classList.remove('hidden');
+                controlsContainer.innerHTML = '';
+                
+                module.controls.forEach(ctrl => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'flex flex-col';
+                    
+                    const label = document.createElement('label');
+                    label.className = 'text-sm font-semibold text-slate-300 mb-1';
+                    label.innerText = `${ctrl.label}: `;
+                    
+                    const valSpan = document.createElement('span');
+                    valSpan.id = `${ctrl.id}-val`;
+                    valSpan.className = 'text-blue-400 font-bold';
+                    valSpan.innerText = ctrl.value;
+                    label.appendChild(valSpan);
+                    
+                    const input = document.createElement('input');
+                    input.type = ctrl.type;
+                    input.id = ctrl.id;
+                    input.min = ctrl.min;
+                    input.max = ctrl.max;
+                    input.value = ctrl.value;
+                    input.step = ctrl.step;
+                    input.className = 'w-full h-2 bg-slate-700 rounded-lg appearance-none cursor-pointer accent-blue-500';
+                    
+                    input.addEventListener('input', (e) => {
+                        document.getElementById(`${ctrl.id}-val`).innerText = e.target.value;
+                        module.renderChart(); // Re-render chart on slider move
+                    });
+
+                    wrapper.appendChild(label);
+                    wrapper.appendChild(input);
+                    controlsContainer.appendChild(wrapper);
+                });
+            } else {
+                interactivePanel.classList.add('hidden');
+            }
+
+            // Render Initial Chart
+            module.renderChart();
+        }
+
+        function updateChartInstance(type, labels, data, datasetLabel, colorFunctionOrString, fill = false) {
+            const ctx = document.getElementById('mainChart').getContext('2d');
+            
+            if (currentChart) {
+                currentChart.destroy();
+            }
+
+            // Grid colors
+            Chart.defaults.color = '#94a3b8';
+            Chart.defaults.borderColor = 'rgba(148, 163, 184, 0.1)';
+
+            const isColorFn = typeof colorFunctionOrString === 'function';
+
+            currentChart = new Chart(ctx, {
+                type: type, // 'line' or 'bar'
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: datasetLabel,
+                        data: data,
+                        borderColor: isColorFn ? 'rgba(59, 130, 246, 1)' : colorFunctionOrString,
+                        backgroundColor: (isColorFn && type === 'bar') ? colorFunctionOrString : (isColorFn ? 'rgba(59, 130, 246, 0.1)' : colorFunctionOrString),
+                        borderWidth: 2,
+                        fill: fill,
+                        tension: 0.4, // smooth curves
+                        pointRadius: type === 'line' ? 0 : undefined,
+                        pointHoverRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleColor: '#fff',
+                            bodyColor: '#cbd5e1',
+                            borderColor: 'rgba(59, 130, 246, 0.5)',
+                            borderWidth: 1
+                        }
+                    },
+                    scales: {
+                        x: {
+                            grid: { display: false }
+                        },
+                        y: {
+                            grid: { color: 'rgba(148, 163, 184, 0.1)' }
+                        }
+                    },
+                    segment: type === 'line' && isColorFn ? {
+                        borderColor: colorFunctionOrString
+                    } : {}
+                }
+            });
+        }
+
+        // Initialize App on load
+        window.onload = initApp;
+    </script>
+</body>
+</html>
